@@ -9,7 +9,7 @@ let userMessage = null;
 let isResponseGenerating = false;
 
 // API configuration
-const API_KEY = "PASTE-YOUR-API-KEY"; // Your API key here
+const API_KEY = "AIzaSyCOoVMW_-9IfNpcNkYp2MdE-CNd5k6kVDw"; // Your API key here
 const API_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${API_KEY}`;
 
 // Load theme and chat data from local storage on page load
@@ -36,7 +36,60 @@ const createMessageElement = (content, ...classes) => {
   return div;
 }
 
-// Show typing effect by displaying words one by one
+// Kiểm tra và hiển thị nội dung (code hoặc văn bản)
+const renderResponse = (response, textElement) => {
+  // Sử dụng regex để tách code block (nếu có)
+  const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g; // Lấy ngôn ngữ và mã code
+  const inlineCodeRegex = /`([^`]+)`/g; // Lấy inline code
+  let lastIndex = 0;
+
+  // Xử lý code block trước
+  response.replace(codeBlockRegex, (match, language, code, offset) => {
+    // Thêm đoạn văn bản trước đoạn code block
+    if (offset > lastIndex) {
+      const textNode = document.createTextNode(
+        response.slice(lastIndex, offset)
+      );
+      textElement.appendChild(textNode);
+    }
+
+    // Tạo code block với Prism.js syntax highlight
+    const pre = document.createElement("pre");
+    const codeElement = document.createElement("code");
+    codeElement.className = `language-${
+      language ? language.trim() : "plaintext"
+    }`;
+    codeElement.textContent = code.trim();
+
+    pre.appendChild(codeElement);
+    textElement.appendChild(pre);
+
+    lastIndex = offset + match.length;
+  });
+
+  // Thêm văn bản còn lại sau đoạn code block
+  if (lastIndex < response.length) {
+    const textNode = document.createTextNode(response.slice(lastIndex));
+    textElement.appendChild(textNode);
+  }
+
+  // Xử lý inline code
+  let finalHTML = textElement.innerHTML; // Lưu nội dung hiện tại của textElement vào biến tạm
+  finalHTML = finalHTML.replace(inlineCodeRegex, (match, code) => {
+    return `<code>${code.trim()}</code>`;
+  });
+
+  // Xóa nội dung hiện tại và thêm nội dung đã xử lý
+  textElement.innerHTML = finalHTML;
+
+  // Kích hoạt lại Prism.js để highlight
+  Prism.highlightAllUnder(textElement);
+
+  isResponseGenerating = false;
+  localStorage.setItem("saved-chats", chatContainer.innerHTML); // Lưu đoạn chat vào local storage
+  chatContainer.scrollTo(0, chatContainer.scrollHeight); // Cuộn xuống cuối
+};
+
 const showTypingEffect = (text, textElement, incomingMessageDiv) => {
   const words = text.split(' ');
   let currentWordIndex = 0;
@@ -66,11 +119,11 @@ const generateAPIResponse = async (incomingMessageDiv) => {
     const response = await fetch(API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        contents: [{ 
-          role: "user", 
-          parts: [{ text: userMessage }] 
-        }] 
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [{ text: userMessage }]
+        }]
       }),
     });
 
@@ -79,7 +132,8 @@ const generateAPIResponse = async (incomingMessageDiv) => {
 
     // Get the API response text and remove asterisks from it
     const apiResponse = data?.candidates[0].content.parts[0].text.replace(/\*\*(.*?)\*\*/g, '$1');
-    showTypingEffect(apiResponse, textElement, incomingMessageDiv); // Show typing effect
+    renderResponse(apiResponse, textElement);
+    // showTypingEffect(apiResponse, textElement, incomingMessageDiv); // Show typing effect
   } catch (error) { // Handle error
     isResponseGenerating = false;
     textElement.innerText = error.message;
@@ -133,7 +187,7 @@ const handleOutgoingChat = () => {
   const outgoingMessageDiv = createMessageElement(html, "outgoing");
   outgoingMessageDiv.querySelector(".text").innerText = userMessage;
   chatContainer.appendChild(outgoingMessageDiv);
-  
+
   typingForm.reset(); // Clear input field
   document.body.classList.add("hide-header");
   chatContainer.scrollTo(0, chatContainer.scrollHeight); // Scroll to the bottom
@@ -165,7 +219,7 @@ suggestions.forEach(suggestion => {
 
 // Prevent default form submission and handle outgoing chat
 typingForm.addEventListener("submit", (e) => {
-  e.preventDefault(); 
+  e.preventDefault();
   handleOutgoingChat();
 });
 
